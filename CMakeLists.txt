@@ -4,6 +4,7 @@ set(USE_DC1394 TRUE CACHE BOOL "Compile with DC1394 driver (firewire cameras)")
 set(USE_SPINNAKER FALSE CACHE BOOL "Compile with Spinnaker driver (FLIR cameras)")
 set(USE_mvIMPACT FALSE CACHE BOOL "Compile with mvImpact driver (bluefox USB2 + USB3 cameras)")
 set(USE_PYLON FALSE CACHE BOOL "Compile with pylon driver (Basler cameras)")
+set(USE_DAHENG FALSE CACHE BOOL "Compile with daheng driver (Daheng cameras)")
 set(USE_FLYCAP FALSE CACHE BOOL "Compile with flycap driver (FLIR cameras, predecessor of Spinnaker)")
 set(USE_V4L TRUE CACHE BOOL "Compile with Video4Linux support (generic webcams)")
 set(USE_SPLITTER FALSE CACHE BOOL "Compile with Camera splitter support (virtual cameras with part of a full image)")
@@ -92,6 +93,25 @@ if( USE_PYLON )
 else()
 	message(STATUS "Pylon disabled")
 endif()
+
+if( USE_DAHENG )
+	# find_package( DAHENG REQUIRED )
+	# include_directories(SYSTEM ${DAHENG_INCLUDE_DIRS})
+  # Check if  /usr/lib/libgxiapi.so exists
+  if(NOT EXISTS "/usr/lib/libgxiapi.so")
+    message(FATAL_ERROR "DAHENG library not found")
+  endif()
+
+  set(DAHENG_LIBRARIES /usr/lib/libgxiapi.so)
+
+	add_definitions(-DDAHENG)
+	set (SHARED_SRCS ${SHARED_SRCS} ${shared_dir}/capture/capture_basler.cpp)
+	set (SHARED_HEADERS ${SHARED_HEADERS} ${shared_dir}/capture/capture_basler.h)
+	message(STATUS "DAHENG enabled")
+else()
+	message(STATUS "DAHENG disabled")
+endif()
+
 
 if( USE_SPINNAKER )
 	find_package( SPINNAKER REQUIRED )
@@ -254,6 +274,7 @@ set (libs
   ${DC1394_LIBRARIES}
   ${mvIMPACT_LIBS}
   ${PYLON_LIBRARIES}
+  ${DAHENG_LIBRARIES}
   ${OpenCV_LIBS}
   ${FLYCAP_LIBS}
   ${SPINNAKER_LIBS}

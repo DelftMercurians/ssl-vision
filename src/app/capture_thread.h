@@ -24,17 +24,18 @@
 #ifdef DC1394
 #include "capturedc1394v2.h"
 #endif
-#include "capturefromfile.h"
-#include "capturev4l.h"
+#include <QThread>
+
+#include "affinity_manager.h"
 #include "capture_generator.h"
 #include "capture_splitter.h"
-#include <QThread>
-#include "ringbuffer.h"
-#include "framedata.h"
-#include "framecounter.h"
-#include "visionstack.h"
+#include "capturefromfile.h"
 #include "capturestats.h"
-#include "affinity_manager.h"
+#include "capturev4l.h"
+#include "framecounter.h"
+#include "framedata.h"
+#include "ringbuffer.h"
+#include "visionstack.h"
 
 #ifdef MVIMPACT2
 #include "capture_bluefox2.h"
@@ -52,6 +53,10 @@
 #include "capture_basler.h"
 #endif
 
+#ifdef DAHENG
+#include "capture_daheng.h"
+#endif
+
 #ifdef SPINNAKER
 #include "capture_spinnaker.h"
 #endif
@@ -61,77 +66,68 @@
   \brief   A thread for capturing and processing video data
   \author  Stefan Zickler, (C) 2008
 */
-class CaptureThread : public QThread
-{
-Q_OBJECT
-protected:
-  QMutex stack_mutex; //this mutex protects multi-threaded operations on the stack
-  QMutex capture_mutex; //this mutex protects multi-threaded operations on the capture control
-  VisionStack * stack;
-  FrameCounter * counter;
-  CaptureInterface * capture = nullptr;
-  CaptureInterface * captureDC1394 = nullptr;
-  CaptureInterface * captureV4L = nullptr;
-  CaptureInterface * captureBlueFox2 = nullptr;
-  CaptureInterface * captureBlueFox3 = nullptr;
-  CaptureInterface * captureFlycap = nullptr;
-  CaptureInterface * captureFiles = nullptr;
-  CaptureInterface * captureGenerator = nullptr;
-  CaptureInterface * captureBasler = nullptr;
-  CaptureInterface * captureSpinnaker = nullptr;
-  CaptureInterface * captureSplitter = nullptr;
-  AffinityManager * affinity;
-  FrameBuffer * rb;
+class CaptureThread : public QThread {
+  Q_OBJECT
+ protected:
+  QMutex stack_mutex;    // this mutex protects multi-threaded operations on the stack
+  QMutex capture_mutex;  // this mutex protects multi-threaded operations on the capture control
+  VisionStack* stack;
+  FrameCounter* counter;
+  CaptureInterface* capture = nullptr;
+  CaptureInterface* captureDC1394 = nullptr;
+  CaptureInterface* captureV4L = nullptr;
+  CaptureInterface* captureBlueFox2 = nullptr;
+  CaptureInterface* captureBlueFox3 = nullptr;
+  CaptureInterface* captureFlycap = nullptr;
+  CaptureInterface* captureFiles = nullptr;
+  CaptureInterface* captureGenerator = nullptr;
+  CaptureInterface* captureBasler = nullptr;
+  CaptureInterface* captureSpinnaker = nullptr;
+  CaptureInterface* captureSplitter = nullptr;
+  AffinityManager* affinity;
+  FrameBuffer* rb;
   bool _kill;
   int camId;
-  VarList * settings;
-  VarList * dc1394 = nullptr;
-  VarList * v4l = nullptr;
-  VarList * bluefox2 = nullptr;
-  VarList * bluefox3 = nullptr;
-  VarList * flycap = nullptr;
-  VarList * generator = nullptr;
-  VarList * fromfile = nullptr;
-  VarList * basler = nullptr;
-  VarList * spinnaker = nullptr;
-  VarList * splitter = nullptr;
-  VarList * control;
-  VarTrigger * c_start;
-  VarTrigger * c_stop;
-  VarTrigger * c_reset;
-  VarTrigger * c_refresh;
-  VarBool * c_auto_refresh;
-  VarBool * c_print_timings;
-  VarStringEnum * captureModule;
+  VarList* settings;
+  VarList* dc1394 = nullptr;
+  VarList* v4l = nullptr;
+  VarList* bluefox2 = nullptr;
+  VarList* bluefox3 = nullptr;
+  VarList* flycap = nullptr;
+  VarList* generator = nullptr;
+  VarList* fromfile = nullptr;
+  VarList* basler = nullptr;
+  VarList* spinnaker = nullptr;
+  VarList* splitter = nullptr;
+  VarList* control;
+  VarTrigger* c_start;
+  VarTrigger* c_stop;
+  VarTrigger* c_reset;
+  VarTrigger* c_refresh;
+  VarBool* c_auto_refresh;
+  VarBool* c_print_timings;
+  VarStringEnum* captureModule;
 
-public slots:
+ public slots:
   bool init();
   bool stop();
   bool reset();
   void refresh();
   void selectCaptureMethod();
 
-public:
-  void setFrameBuffer(FrameBuffer * _rb);
-  FrameBuffer * getFrameBuffer() const;
-  void setStack(VisionStack * _stack);
-  VisionStack * getStack() const;
+ public:
+  void setFrameBuffer(FrameBuffer* _rb);
+  FrameBuffer* getFrameBuffer() const;
+  void setStack(VisionStack* _stack);
+  VisionStack* getStack() const;
   void kill();
-  VarList * getSettings();
-  void setAffinityManager(AffinityManager * _affinity);
-  CaptureInterface* getCaptureSplitter() {return captureSplitter;};
+  VarList* getSettings();
+  void setAffinityManager(AffinityManager* _affinity);
+  CaptureInterface* getCaptureSplitter() { return captureSplitter; };
   CaptureThread(int cam_id);
   ~CaptureThread();
 
   virtual void run();
-
 };
-
-
-
-
-
-
-
 
 #endif
