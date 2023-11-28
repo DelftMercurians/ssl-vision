@@ -7,6 +7,7 @@
 
 #include "capture_daheng.h"
 
+#include <QDebug>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,53 @@
 int DahengInitManager::count = 0;
 
 void GetErrorString(GX_STATUS emErrorStatus);
+
+int CaptureDaheng::PixelFormatConvert() {
+  VxInt32 emDXStatus = DX_OK;
+
+  // Convert RAW8 or RAW16 image to RGB24 image
+  switch (pFrameBuffer->nPixelFormat) {
+    case GX_PIXEL_FORMAT_BAYER_GR8:
+    case GX_PIXEL_FORMAT_BAYER_RG8:
+    case GX_PIXEL_FORMAT_BAYER_GB8:
+    case GX_PIXEL_FORMAT_BAYER_BG8: {
+      // Convert to the RGB image
+      emDXStatus =
+          DxRaw8toRGB24((unsigned char *)pFrameBuffer->pImgBuf, g_pRGBImageBuf, pFrameBuffer->nWidth,
+                        pFrameBuffer->nHeight, RAW2RGB_NEIGHBOUR, DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
+      if (emDXStatus != DX_OK) {
+        return -1;
+      }
+      break;
+    }
+    case GX_PIXEL_FORMAT_BAYER_GR10:
+    case GX_PIXEL_FORMAT_BAYER_RG10:
+    case GX_PIXEL_FORMAT_BAYER_GB10:
+    case GX_PIXEL_FORMAT_BAYER_BG10:
+    case GX_PIXEL_FORMAT_BAYER_GR12:
+    case GX_PIXEL_FORMAT_BAYER_RG12:
+    case GX_PIXEL_FORMAT_BAYER_GB12:
+    case GX_PIXEL_FORMAT_BAYER_BG12: {
+      // Convert to the Raw8 image
+      emDXStatus = DxRaw16toRaw8((unsigned char *)pFrameBuffer->pImgBuf, g_pRaw8Image, pFrameBuffer->nWidth,
+                                 pFrameBuffer->nHeight, DX_BIT_2_9);
+      if (emDXStatus != DX_OK) {
+        return -1;
+      }
+      // Convert to the RGB24 image
+      emDXStatus = DxRaw8toRGB24(g_pRaw8Image, g_pRGBImageBuf, pFrameBuffer->nWidth, pFrameBuffer->nHeight,
+                                 RAW2RGB_NEIGHBOUR, DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
+      if (emDXStatus != DX_OK) {
+        return -1;
+      }
+      break;
+    }
+    default: {
+      return -1;
+    }
+  }
+  return 0;
+}
 
 //-------------------------------------------------
 /**
@@ -78,51 +126,57 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
   is_capturing = false;
   g_hDevice = nullptr;
   ignore_capture_failure = false;
-  // converter.OutputPixelFormat = Pylon::PixelType_RGB8packed;
-  // camera.PixelFormat.SetValue(Daheng_GigECamera::PixelFormat_YUV422Packed, true);
   last_buf = nullptr;
 
   settings->addChild(vars = new VarList("Capture Settings"));
   settings->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
   vars->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
-  v_color_mode = new VarStringEnum("color mode", Colors::colorFormatToString(COLOR_RGB8));
-  v_color_mode->addItem(Colors::colorFormatToString(COLOR_YUV422_UYVY));
-  v_color_mode->addItem(Colors::colorFormatToString(COLOR_RGB8));
-  vars->addChild(v_color_mode);
 
   vars->addChild(v_camera_id = new VarInt("Camera ID", default_camera_id, 0, 3));
 
   v_framerate = new VarDouble("Max Framerate", 100.0, 0.0, 100.0);
   vars->addChild(v_framerate);
 
-  v_balance_ratio_red = new VarInt("Balance Ratio Red", 64, 0, 255);
-  vars->addChild(v_balance_ratio_red);
+  v_auto_balance = new VarBool("Auto Balance", false);
+  vars->addChild(v_auto_balance);
 
-  v_balance_ratio_green = new VarInt("Balance Ratio Green", 64, 0, 255);
-  vars->addChild(v_balance_ratio_green);
+  v_auto_balance_roi_width = new VarInt("Auto Balance ROI Width", 0, 0);
+  vars->addChild(v_auto_balance_roi_width);
 
-  v_balance_ratio_blue = new VarInt("Balance Ratio Blue", 64, 0, 255);
-  vars->addChild(v_balance_ratio_blue);
+  v_auto_balance_roi_height = new VarInt("Auto Balance ROI Height", 0, 0);
+  vars->addChild(v_auto_balance_roi_height);
 
-  v_auto_gain = new VarBool("auto gain", false);
+  v_auto_balance_roi_offset_x = new VarInt("Auto Balance ROI Offset X", 0);
+  vars->addChild(v_auto_balance_roi_offset_x);
+
+  v_auto_balance_roi_offset_y = new VarInt("Auto Balance ROI Offset Y", 0);
+  vars->addChild(v_auto_balance_roi_offset_y);
+
+  v_man_balance_ratio_red = new VarInt("Balance Ratio Red", 64, 0, 255);
+  vars->addChild(v_man_balance_ratio_red);
+
+  v_man_balance_ratio_green = new VarInt("Balance Ratio Green", 64, 0, 255);
+  vars->addChild(v_man_balance_ratio_green);
+
+  v_man_balance_ratio_blue = new VarInt("Balance Ratio Blue", 64, 0, 255);
+  vars->addChild(v_man_balance_ratio_blue);
+
+  v_auto_gain = new VarBool("Auto Gain", false);
   vars->addChild(v_auto_gain);
 
-  v_gain = new VarInt("gain", 300, 0, 542);
+  v_gain = new VarInt("Gain", 0, 0, 255);
   vars->addChild(v_gain);
 
-  v_gamma_enable = new VarBool("enable gamma correction", true);
-  vars->addChild(v_gamma_enable);
+  v_auto_black_level = new VarBool("Auto Black Level", false);
+  vars->addChild(v_auto_black_level);
 
-  v_gamma = new VarDouble("gamma", 0.5, 0, 1.0);
-  vars->addChild(v_gamma);
-
-  v_black_level = new VarDouble("black level", 64, 0, 1000);
+  v_black_level = new VarDouble("Black Level", 64, 0, 1000);
   vars->addChild(v_black_level);
 
-  v_auto_exposure = new VarBool("auto exposure", false);
+  v_auto_exposure = new VarBool("Auto Exposure", false);
   vars->addChild(v_auto_exposure);
 
-  v_manual_exposure = new VarDouble("manual exposure (μs)", 10000, 1000, 30000);
+  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 10000, 1000, 30000);
   vars->addChild(v_manual_exposure);
 
   current_id = 0;
@@ -136,16 +190,21 @@ CaptureDaheng::~CaptureDaheng() { vars->deleteAllChildren(); }
 bool CaptureDaheng::_buildCamera() {
   DahengInitManager::register_capture();
   current_id = v_camera_id->get();
-  printf("Current camera id: %d\n", current_id);
 
-  GX_STATUS emStatus = GXOpenDeviceByIndex(1, &g_hDevice);
+  GX_STATUS emStatus = GXOpenDeviceByIndex(current_id, &g_hDevice);
+  if (emStatus != GX_STATUS_SUCCESS) {
+    GetErrorString(emStatus);
+    return false;
+  }
+
+  emStatus = GXGetInt(g_hDevice, GX_INT_PAYLOAD_SIZE, &g_nPayloadSize);
   if (emStatus != GX_STATUS_SUCCESS) {
     GetErrorString(emStatus);
     return false;
   }
 
   // Set acquisition mode
-  GX_STATUS emStatus = GXSetEnum(g_hDevice, GX_ENUM_ACQUISITION_MODE, GX_ACQ_MODE_CONTINUOUS);
+  emStatus = GXSetEnum(g_hDevice, GX_ENUM_ACQUISITION_MODE, GX_ACQ_MODE_CONTINUOUS);
   if (emStatus != GX_STATUS_SUCCESS) {
     GetErrorString(emStatus);
     return false;
@@ -166,40 +225,8 @@ bool CaptureDaheng::_buildCamera() {
     return false;
   }
 
-  bool bStreamTransferSize = false;
-  emStatus = GXIsImplemented(g_hDevice, GX_DS_INT_STREAM_TRANSFER_SIZE, &bStreamTransferSize);
-  if (emStatus != GX_STATUS_SUCCESS) {
-    GetErrorString(emStatus);
-    return false;
-  }
-
-  if (bStreamTransferSize) {
-    // Set size of data transfer block
-    emStatus = GXSetInt(g_hDevice, GX_DS_INT_STREAM_TRANSFER_SIZE, ACQ_TRANSFER_SIZE);
-    if (emStatus != GX_STATUS_SUCCESS) {
-      GetErrorString(emStatus);
-      return false;
-    }
-  }
-
-  bool bStreamTransferNumberUrb = false;
-  emStatus = GXIsImplemented(g_hDevice, GX_DS_INT_STREAM_TRANSFER_NUMBER_URB, &bStreamTransferNumberUrb);
-  if (emStatus != GX_STATUS_SUCCESS) {
-    GetErrorString(emStatus);
-    return false;
-  }
-
-  if (bStreamTransferNumberUrb) {
-    // Set qty. of data transfer block
-    emStatus = GXSetInt(g_hDevice, GX_DS_INT_STREAM_TRANSFER_NUMBER_URB, ACQ_TRANSFER_NUMBER_URB);
-  }
-  if (emStatus != GX_STATUS_SUCCESS) {
-    GetErrorString(emStatus);
-    return false;
-  }
-
-  // Set Balance White Mode : Continuous
-  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_ONCE);
+  // Get color filter
+  emStatus = GXGetEnum(g_hDevice, GX_ENUM_PIXEL_COLOR_FILTER, &g_i64ColorFilter);
   if (emStatus != GX_STATUS_SUCCESS) {
     GetErrorString(emStatus);
     return false;
@@ -215,7 +242,6 @@ bool CaptureDaheng::_buildCamera() {
     return false;
   }
 
-  printf("Done!\n");
   is_capturing = true;
   return true;
 }
@@ -224,7 +250,7 @@ bool CaptureDaheng::startCapture() {
   MUTEX_LOCK;
   if (g_hDevice == nullptr) {
     if (!_buildCamera()) {
-      // Did not make a camera!
+      printf("Failed to build Daheng camera\n");
       MUTEX_UNLOCK;
       return false;
     }
@@ -298,64 +324,48 @@ RawImage CaptureDaheng::getFrame() {
   img.setColorFormat(COLOR_RGB8);
 
   GX_STATUS emStatus = GX_STATUS_SUCCESS;
-  PGX_FRAME_BUFFER pFrameBuffer = NULL;
 
-  try {
-    // Keep grabbing in case of partial grabs
-    int fail_count = 0;
-    while (fail_count < 10) {
-      emStatus = GXDQBuf(g_hDevice, &pFrameBuffer, 1000);
+  // Calls GXDQBuf to get a frame of image.
+  emStatus = GXDQBuf(g_hDevice, &pFrameBuffer, 1000);
+  if (emStatus == GX_STATUS_SUCCESS) {
+    // Check if frame grab was succesful
+    if (pFrameBuffer->nStatus == GX_FRAME_STATUS_SUCCESS) {
+      // Convert to RAW8
+      if (PixelFormatConvert() == 0) {
+        // Copy image data to RawImage
+        img.setWidth(pFrameBuffer->nWidth);
+        img.setHeight(pFrameBuffer->nHeight);
+        unsigned char *buf = (unsigned char *)malloc(g_nPayloadSize * 3);
+        memcpy(buf, g_pRGBImageBuf, g_nPayloadSize * 3);
+        img.setData(buf);
+        last_buf = buf;
 
-      if (emStatus != GX_STATUS_SUCCESS) {
-        if (emStatus == GX_STATUS_TIMEOUT) {
-          fail_count++;
-          continue;
-        } else {
-          GetErrorString(emStatus);
-          break;
-        }
+        // Set the timestamp
+        timeval tv = {};
+        gettimeofday(&tv, nullptr);
+        double systemTime = (double)tv.tv_sec + (tv.tv_usec / 1000000.0);
+        img.setTime(systemTime);
+
+      } else {
+        printf("Daheng color conversion failed\n");
       }
-
-      if (pFrameBuffer->nStatus != GX_FRAME_STATUS_SUCCESS) {
-        fail_count++;
-        fprintf(stderr, "Image grab failed in CaptureDaheng::getFrame: %d\n", pFrameBuffer->nStatus);
-        continue;
+    } else {
+      if (!pFrameBuffer->nStatus == GX_FRAME_STATUS_INCOMPLETE) {
+        printf(
+            "Daheng framegrab error: incomplete frame -- check your network connection. It's best to use wired "
+            "ethernet.\n");
+      } else {
+        printf("Daheng framegrab failed with status %d\n", pFrameBuffer->nStatus);
       }
-
-      // If successful, break from the loop
-      break;
     }
-
-    if (fail_count == 10) {
-      fprintf(stderr, "Maximum retry count for image grabbing (%d) exceeded in capture_daheng\n", fail_count);
-      MUTEX_UNLOCK;
-      return img;
-    }
-
-    // Process the image data as needed
-    img.setWidth(pFrameBuffer->nWidth);
-    img.setHeight(pFrameBuffer->nHeight);
-    unsigned char *buf = (unsigned char *)malloc(pFrameBuffer->nImgSize);
-    memcpy(buf, pFrameBuffer->pImgBuf, pFrameBuffer->nImgSize);
-    img.setData(buf);
-
-    // Set the timestamp
-    timeval tv = {};
-    gettimeofday(&tv, nullptr);
-    double systemTime = (double)tv.tv_sec + (tv.tv_usec / 1000000.0);
-    img.setTime(systemTime);
 
     // Requeue the buffer
     emStatus = GXQBuf(g_hDevice, pFrameBuffer);
     if (emStatus != GX_STATUS_SUCCESS) {
       GetErrorString(emStatus);
     }
-
-  } catch (...) {
-    // Handle other exceptions
-    fprintf(stderr, "Uncaught exception in CaptureDaheng::getFrame\n");
-    MUTEX_UNLOCK;
-    throw;
+  } else {
+    GetErrorString(emStatus);
   }
 
   MUTEX_UNLOCK;
@@ -380,41 +390,7 @@ bool CaptureDaheng::copyAndConvertFrame(const RawImage &src, RawImage &target) {
 }
 
 void CaptureDaheng::readAllParameterValues() {
-  // MUTEX_LOCK;
-  // try {
-  // 	if (!camera)
-  // 		return;
-  // 	bool was_open = camera->IsOpen();
-  // 	if (!was_open) {
-  // 		camera->Open();
-  // 	}
-  // 	v_framerate->setDouble(camera->AcquisitionFrameRateAbs.GetValue());
-  // 	camera->BalanceRatioSelector.SetValue(
-  // 			Daheng_GigECamera::BalanceRatioSelector_Red);
-  // 	v_balance_ratio_red->setInt(camera->BalanceRatioRaw.GetValue());
-  // 	camera->BalanceRatioSelector.SetValue(
-  // 			Daheng_GigECamera::BalanceRatioSelector_Green);
-  // 	v_balance_ratio_green->setInt(camera->BalanceRatioRaw.GetValue());
-  // 	camera->BalanceRatioSelector.SetValue(
-  // 			Daheng_GigECamera::BalanceRatioSelector_Blue);
-  // 	v_balance_ratio_blue->setInt(camera->BalanceRatioRaw.GetValue());
-
-  // 	v_auto_gain->setBool(camera->GainAuto.GetValue() == Daheng_GigECamera::GainAuto_Continuous);
-  // 	v_gain->setDouble(camera->GainRaw.GetValue());
-  // 	v_gamma_enable->setBool(camera->GammaEnable.GetValue());
-  // 	v_gamma->setDouble(camera->Gamma.GetValue());
-
-  // 	v_auto_exposure->setBool(camera->ExposureAuto.GetValue() == Daheng_GigECamera::ExposureAuto_Continuous);
-  // 	v_manual_exposure->setDouble(camera->ExposureTimeAbs.GetValue());
-  // // } catch (const Pylon::GenericException& e) {
-  // 	fprintf(stderr, "Exception reading parameter values: %s\n", e.what());
-  // 	MUTEX_UNLOCK;
-  // 	return;
-  // } catch (...) {
-  // 	MUTEX_UNLOCK;
-  // 	throw;
-  // }
-  // MUTEX_UNLOCK;
+  // TODO: read all parameter values
 }
 
 void CaptureDaheng::resetCamera(unsigned int new_id) {
@@ -429,65 +405,156 @@ void CaptureDaheng::resetCamera(unsigned int new_id) {
 }
 
 void CaptureDaheng::writeParameterValues(VarList *varList) {
-  // if (varList != this->settings) {
-  // 	return;
-  // }
-  // MUTEX_LOCK;
-  // try {
-  // 	if(current_id != v_camera_id->get()){
-  //           MUTEX_UNLOCK;
-  //           resetCamera(v_camera_id->get()); // locks itself
-  //           MUTEX_LOCK;
-  // 	}
+  if (varList != this->settings) {
+    return;
+  }
+  MUTEX_LOCK;
 
-  //       if (camera != nullptr) {
-  //           camera->Open();
+  if (current_id != v_camera_id->get()) {
+    MUTEX_UNLOCK;
+    resetCamera(v_camera_id->get());  // locks itself
+    MUTEX_LOCK;
+  }
 
-  //           camera->AcquisitionFrameRateAbs.SetValue(v_framerate->getDouble());
+  if (g_hDevice != nullptr) {
+    GX_STATUS status = GX_STATUS_SUCCESS;
 
-  //           camera->BalanceRatioSelector.SetValue(
-  //                   Daheng_GigECamera::BalanceRatioSelector_Red);
-  //           camera->BalanceRatioRaw.SetValue(v_balance_ratio_red->get());
-  //           camera->BalanceRatioSelector.SetValue(
-  //                   Daheng_GigECamera::BalanceRatioSelector_Green);
-  //           camera->BalanceRatioRaw.SetValue(v_balance_ratio_green->get());
-  //           camera->BalanceRatioSelector.SetValue(
-  //                   Daheng_GigECamera::BalanceRatioSelector_Blue);
-  //           camera->BalanceRatioRaw.SetValue(v_balance_ratio_blue->get());
-  //           camera->BalanceWhiteAuto.SetValue(
-  //                   Daheng_GigECamera::BalanceWhiteAuto_Off);
+    // Frame rate setting
+    //  1. Enable the frame rate adjustment mode.
+    status = GXSetEnum(g_hDevice, GX_ENUM_ACQUISITION_FRAME_RATE_MODE, GX_ACQUISITION_FRAME_RATE_MODE_ON);
+    if (status == GX_STATUS_SUCCESS) {
+      //  2. Set the frame rate.
+      status = GXSetFloat(g_hDevice, GX_FLOAT_ACQUISITION_FRAME_RATE, v_framerate->getDouble());
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    } else {
+      GetErrorString(status);
+    }
 
-  //           if (v_auto_gain->getBool()) {
-  //               camera->GainAuto.SetValue(Daheng_GigECamera::GainAuto_Continuous);
-  //           } else {
-  //               camera->GainAuto.SetValue(Daheng_GigECamera::GainAuto_Off);
-  //               camera->GainRaw.SetValue(v_gain->getInt());
-  //           }
+    // Balance ratio setting
+    if (v_auto_balance->getBool()) {
+      status = GXSetInt(g_hDevice, GX_INT_AWBROI_WIDTH, v_auto_balance_roi_width->get());
+      status = GXSetInt(g_hDevice, GX_INT_AWBROI_HEIGHT, v_auto_balance_roi_height->get());
+      status = GXSetInt(g_hDevice, GX_INT_AWBROI_OFFSETX, v_auto_balance_roi_offset_x->get());
+      status = GXSetInt(g_hDevice, GX_INT_AWBROI_OFFSETY, v_auto_balance_roi_offset_y->get());
+      if (status == GX_STATUS_SUCCESS) {
+        status = GXSetEnum(g_hDevice, GX_ENUM_AWB_LAMP_HOUSE, GX_AWB_LAMP_HOUSE_FLUORESCENCE);
+        status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_ONCE);
+        if (status != GX_STATUS_SUCCESS) {
+          GetErrorString(status);
+        }
+      } else {
+        GetErrorString(status);
+      }
+    } else {
+      // Get range of balance ratio
+      GX_FLOAT_RANGE ratioRange;
+      status = GXGetFloatRange(g_hDevice, GX_FLOAT_BALANCE_RATIO, &ratioRange);
 
-  //           if (v_gamma_enable->getBool()) {
-  //               camera->GammaEnable.SetValue(true);
-  //               camera->Gamma.SetValue(v_gamma->getDouble());
-  //           } else {
-  //               camera->GammaEnable.SetValue(false);
-  //           }
+      // Red
+      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_RED);
+      if (status == GX_STATUS_SUCCESS) {
+        // Remap value from [0, 255] to [min, max]
+        float mapped = ((float)v_man_balance_ratio_red->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
+        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
+        if (status != GX_STATUS_SUCCESS) {
+          GetErrorString(status);
+        }
+      } else {
+        GetErrorString(status);
+      }
 
-  //           if (v_auto_exposure->getBool()) {
-  //               camera->ExposureAuto.SetValue(
-  //                       Daheng_GigECamera::ExposureAuto_Continuous);
-  //           } else {
-  //               camera->ExposureAuto.SetValue(Daheng_GigECamera::ExposureAuto_Off);
-  //               camera->ExposureTimeAbs.SetValue(v_manual_exposure->getDouble());
-  //           }
-  //       }
-  // // } catch (const Pylon::GenericException& e) {
-  // 	MUTEX_UNLOCK;
-  // 	fprintf(stderr, "Error writing parameter values: %s\n", e.what());
-  // 	throw;
-  // } catch (...) {
-  // 	MUTEX_UNLOCK;
-  // 	throw;
-  // }
-  // MUTEX_UNLOCK;
+      // Green
+      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_GREEN);
+      if (status == GX_STATUS_SUCCESS) {
+        // Remap value from [0, 255] to [min, max]
+        float mapped = ((float)v_man_balance_ratio_green->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
+        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
+        if (status != GX_STATUS_SUCCESS) {
+          GetErrorString(status);
+        }
+      } else {
+        GetErrorString(status);
+      }
+
+      // Blue
+      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_BLUE);
+      if (status == GX_STATUS_SUCCESS) {
+        // Remap value from [0, 255] to [min, max]
+        float mapped = ((float)v_man_balance_ratio_blue->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
+        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
+        if (status != GX_STATUS_SUCCESS) {
+          GetErrorString(status);
+        }
+      } else {
+        GetErrorString(status);
+      }
+    }
+
+    // Gain setting
+    if (v_auto_gain->getBool()) {
+      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_AUTO, GX_GAIN_AUTO_CONTINUOUS);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    } else {
+      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_AUTO, GX_GAIN_AUTO_OFF);
+      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_SELECTOR, GX_GAIN_SELECTOR_ALL);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+
+      GX_FLOAT_RANGE gainRange;
+      status = GXGetFloatRange(g_hDevice, GX_FLOAT_GAIN, &gainRange);
+      float mapped = ((float)v_gain->get() / 255.0f) * gainRange.dMax + gainRange.dMin;
+      status = GXSetFloat(g_hDevice, GX_FLOAT_GAIN, mapped);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    }
+
+    // Black level setting
+    if (v_auto_black_level->getBool()) {
+      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_AUTO, GX_BLACKLEVEL_AUTO_CONTINUOUS);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    } else {
+      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_AUTO, GX_BLACKLEVEL_AUTO_OFF);
+      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_SELECTOR, GX_BLACKLEVEL_SELECTOR_ALL);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+
+      GX_FLOAT_RANGE blackLevelRange;
+      status = GXGetFloatRange(g_hDevice, GX_FLOAT_BLACKLEVEL, &blackLevelRange);
+      float mapped = ((float)v_black_level->getDouble() / 1000.0f) * blackLevelRange.dMax + blackLevelRange.dMin;
+      status = GXSetFloat(g_hDevice, GX_FLOAT_BLACKLEVEL, mapped);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    }
+
+    // Exposure setting
+    if (v_auto_exposure->getBool()) {
+      status = GXSetEnum(g_hDevice, GX_ENUM_EXPOSURE_AUTO, GX_EXPOSURE_AUTO_CONTINUOUS);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    } else {
+      status = GXSetEnum(g_hDevice, GX_ENUM_EXPOSURE_AUTO, GX_EXPOSURE_AUTO_OFF);
+      GX_FLOAT_RANGE exposureRange;
+      status = GXGetFloatRange(g_hDevice, GX_FLOAT_EXPOSURE_TIME, &exposureRange);
+      float mapped = ((float)v_manual_exposure->getDouble() / 30000.0f) * exposureRange.dMax + exposureRange.dMin;
+      status = GXSetFloat(g_hDevice, GX_FLOAT_EXPOSURE_TIME, mapped);
+      if (status != GX_STATUS_SUCCESS) {
+        GetErrorString(status);
+      }
+    }
+  }
+
+  MUTEX_UNLOCK;
 }
 
 void CaptureDaheng::mvc_connect(VarList *group) {

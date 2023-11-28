@@ -82,6 +82,7 @@ class CaptureThread : public QThread {
   CaptureInterface* captureFiles = nullptr;
   CaptureInterface* captureGenerator = nullptr;
   CaptureInterface* captureBasler = nullptr;
+  CaptureInterface* captureDaheng = nullptr;
   CaptureInterface* captureSpinnaker = nullptr;
   CaptureInterface* captureSplitter = nullptr;
   AffinityManager* affinity;
@@ -97,6 +98,7 @@ class CaptureThread : public QThread {
   VarList* generator = nullptr;
   VarList* fromfile = nullptr;
   VarList* basler = nullptr;
+  VarList* daheng = nullptr;
   VarList* spinnaker = nullptr;
   VarList* splitter = nullptr;
   VarList* control;

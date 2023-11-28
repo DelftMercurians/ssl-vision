@@ -66,8 +66,10 @@ class CaptureDaheng : public QObject, public CaptureInterface {
 
   GX_DEV_HANDLE g_hDevice;
   int64_t g_nPayloadSize = 0;
+  PGX_FRAME_BUFFER pFrameBuffer = NULL;
   unsigned char* g_pRGBImageBuf = NULL;  ///< Memory for RAW8toRGB24
   unsigned char* g_pRaw8Image = NULL;    ///< Memory for RAW16toRAW8
+  int64_t g_i64ColorFilter = GX_COLOR_FILTER_NONE;
 
   unsigned int current_id;
   unsigned char* last_buf;
@@ -77,20 +79,24 @@ class CaptureDaheng : public QObject, public CaptureInterface {
   VarList* vars;
   VarInt* v_camera_id;
   VarDouble* v_framerate;
-  VarInt* v_balance_ratio_red;
-  VarInt* v_balance_ratio_green;
-  VarInt* v_balance_ratio_blue;
+  VarBool* v_auto_balance;
+  VarInt* v_auto_balance_roi_width;
+  VarInt* v_auto_balance_roi_height;
+  VarInt* v_auto_balance_roi_offset_x;
+  VarInt* v_auto_balance_roi_offset_y;
+  VarInt* v_man_balance_ratio_red;
+  VarInt* v_man_balance_ratio_green;
+  VarInt* v_man_balance_ratio_blue;
   VarBool* v_auto_gain;
   VarInt* v_gain;
-  VarBool* v_gamma_enable;
-  VarDouble* v_gamma;
+  VarBool* v_auto_black_level;
   VarDouble* v_black_level;
   VarBool* v_auto_exposure;
   VarDouble* v_manual_exposure;
-  VarStringEnum* v_color_mode;
 
   void PreForAcquisition();
   void UnPreForAcquisition();
+  int PixelFormatConvert();
 
   void resetCamera(unsigned int new_id);
   bool _stopCapture();

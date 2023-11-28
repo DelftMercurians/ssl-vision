@@ -219,6 +219,7 @@ void CaptureThread::selectCaptureMethod() {
 #ifdef DAHENG
   else if (captureModule->getString() == "Daheng GigE") {
     new_capture = captureDaheng;
+    printf("captureModule->getString() == Daheng GigE\n");
   }
 #endif
 #ifdef MVIMPACT2
@@ -260,6 +261,7 @@ void CaptureThread::kill() {
 
 bool CaptureThread::init() {
   capture_mutex.lock();
+  printf("CaptureThread::init()\n");
   bool res = (capture != nullptr) && capture->startCapture();
   if (res == true) {
     c_start->addFlags(VARTYPE_FLAG_READONLY);
