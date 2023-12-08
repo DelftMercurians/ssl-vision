@@ -230,3 +230,15 @@ MainWindow::~MainWindow() {
   delete multi_stack;
   exit(0);
 }
+
+void MainWindow::mousePressEvent(QMouseEvent *event) {
+  event->accept();
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event) {
+  event->accept();
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event) {
+  event->accept();
+}

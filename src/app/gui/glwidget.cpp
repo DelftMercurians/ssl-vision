@@ -54,7 +54,9 @@ void GLWidget::mouseAction ( QMouseEvent * event, pixelloc loc ) {
 
 void GLWidget::mousePressEvent ( QMouseEvent * event ) {
   event->setAccepted ( false );
+  printf("Mouse press event at (%d, %d)\n", event->pos().x(), event->pos().y());
   pixelloc loc=zoom.invZoom ( event->pos().x(),event->pos().y(),true );
+  printf("x: %d, y: %d\n", loc.x, loc.y);
   if ( stack!=0 ) stack->mousePressEvent ( event,loc );
   if ( event->isAccepted() ==true ) return;
   mouseStart=event->pos();
