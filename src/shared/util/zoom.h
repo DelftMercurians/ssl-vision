@@ -198,6 +198,8 @@ class Zoom {
     }
 
     pixelloc invZoom ( int x, int y , bool disable_center_origin=false ) {
+      // Print all variables
+      printf("x: %d, y: %d, zoomFactor: %f, flipX: %f, flipY: %f, zoomCenterX: %f, zoomCenterY: %f, img_center_x: %f, img_center_y: %f, SURFACE_WIDTH: %f, SURFACE_HEIGHT: %f\n", x, y, zoomFactor, flipX, flipY, zoomCenterX, zoomCenterY, img_center_x, img_center_y, SURFACE_WIDTH, SURFACE_HEIGHT);
       pixelloc result;
       double tx= ( double ) x;
       double ty= ( double ) y;
