@@ -20,3 +20,6 @@ COPY lib/* /usr/lib/
 # Build
 COPY . .
 RUN cmake -B build -DUSE_DAHENG=true && make -j 8
+
+# Change nginx config to listen on 6079 instead of 80
+RUN sed -i 's/80/6079/g' /etc/nginx/sites-enabled/default
