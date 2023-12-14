@@ -236,62 +236,6 @@ bool CaptureDaheng::_buildCamera() {
   // Allocate the memory for pixel format transform
   PreForAcquisition();
 
-  // int64_t nValue = 0;
-  // emStatus = GXGetInt(g_hDevice, GX_INT_ESTIMATED_BANDWIDTH, &nValue);
-  // if (emStatus != GX_STATUS_SUCCESS) {
-  //   GetErrorString(emStatus);
-  // } else {
-  //   printf("Estimated bandwidth:%d\n", nValue);
-  // }
-
-  // Reads the packet size.
-  // int64_t nPacketSize = 0;
-  // emStatus = GXGetInt(g_hDevice, GX_INT_GEV_PACKETSIZE, &nPacketSize);
-  // if (emStatus != GX_STATUS_SUCCESS) {
-  //   GetErrorString(emStatus);
-  //   return false;
-  // }
-  // printf("Packet Size:%d\n", nPacketSize);
-
-//  // Configures a 2×2 Binning and 2×2 Decimation.
-//  int64_t nBinningH = 2;
-//  int64_t nBinningV = 2;
-//  int64_t nDecimationH = 2;
-//  int64_t nDecimationV = 2;
-//  // Set horizontal and vertical Binning mode to Sum mode.
-//  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING);
-//  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_VERTICAL_MODE_SUM);
-//  emStatus = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, 1);
-//  emStatus = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, 1);
-//  // emStatus = GXSetInt(g_hDevice, GX_INT_DECIMATION_HORIZONTAL, nDecimationH);
-//  // emStatus = GXSetInt(g_hDevice, GX_INT_DECIMATION_VERTICAL, nDecimationV);
-//  if (emStatus != GX_STATUS_SUCCESS) {
-//    GetErrorString(emStatus);
-//    return false;
-//  }
-
-  // // Set packet size
-  // emStatus = GXSetInt(g_hDevice, GX_INT_GEV_PACKETSIZE, 1500);
-  // if (emStatus != GX_STATUS_SUCCESS) {
-  //   GetErrorString(emStatus);
-  //   return false;
-  // }
-
-  // int64_t nPacketDelay = 0;
-  // emStatus = GXGetInt(g_hDevice, GX_INT_GEV_PACKETDELAY, &nPacketDelay);
-  // if (emStatus != GX_STATUS_SUCCESS) {
-  //   GetErrorString(emStatus);
-  //   return false;
-  // }
-  // printf("Packet Delay:%d\n", nPacketDelay);
-
-//  // Set packet delay
-//  emStatus = GXSetInt(g_hDevice, GX_INT_GEV_PACKETDELAY, 100);
-//  if (emStatus != GX_STATUS_SUCCESS) {
-//    GetErrorString(emStatus);
-//    return false;
-//  }
-
   // Device start acquisition
   emStatus = GXStreamOn(g_hDevice);
   if (emStatus != GX_STATUS_SUCCESS) {
@@ -319,7 +263,6 @@ bool CaptureDaheng::startCapture() {
 
 bool CaptureDaheng::_stopCapture() {
   if (is_capturing) {
-    // TODO: stop capture
     is_capturing = false;
     return true;
   }
