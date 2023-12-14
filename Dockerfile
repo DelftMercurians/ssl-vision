@@ -22,4 +22,4 @@ COPY . .
 RUN cmake -B build -DUSE_DAHENG=true && make -j 8
 
 # Change nginx config to listen on 6080 instead of 80
-RUN sed -i 's/80/6079/g' /etc/nginx/sites-enabled/default
+RUN sed -i 's/80/6080/g' /etc/nginx/sites-enabled/default
