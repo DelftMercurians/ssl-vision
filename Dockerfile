@@ -1,7 +1,7 @@
 FROM dorowu/ubuntu-desktop-lxde-vnc
 
 ENV DEBIAN_FRONTEND noninteractive
-WORKDIR /vision
+WORKDIR /root/vision
 
 # Install necessary packages
 ENV DEBIAN_FRONTEND noninteractive
@@ -16,6 +16,7 @@ RUN curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add  &
   libv4l-0
 
 COPY lib/* /usr/lib/
+COPY ./GxGigeIPConfig /root/
 
 # Build
 COPY . .

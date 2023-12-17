@@ -133,7 +133,16 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
   settings->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
   vars->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
 
-  vars->addChild(v_camera_id = new VarInt("Camera ID", default_camera_id, 0, 3));
+  vars->addChild(v_camera_id = new VarInt("Camera ID", default_camera_id, 0, 10));
+
+  v_binning = new VarInt("Binning (downscaling)", 0, 0, 4);
+  vars->addChild(v_binning);
+
+  v_packet_size = new VarInt("Packet Size", 8192, 0, 9000);
+  vars->addChild(v_packet_size);
+
+  v_packet_delay = new VarInt("Packet Delay", 0, 0, 100000);
+  vars->addChild(v_packet_delay);
 
   v_framerate = new VarDouble("Max Framerate", 100.0, 0.0, 100.0);
   vars->addChild(v_framerate);
@@ -177,7 +186,7 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
   v_auto_exposure = new VarBool("Auto Exposure", false);
   vars->addChild(v_auto_exposure);
 
-  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 10000, 0, 30000);
+  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 100, 0, 30000);
   vars->addChild(v_manual_exposure);
 
   current_id = 0;
@@ -420,6 +429,37 @@ void CaptureDaheng::writeParameterValues(VarList *varList) {
   if (g_hDevice != nullptr) {
     GX_STATUS status = GX_STATUS_SUCCESS;
 
+    // Binning setting
+    int binning = v_binning->get();
+    if (binning <= 0) {
+      // Disable binning (set averging to 1x1)
+      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
+      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
+      status = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, 1);
+      status = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, 1);
+    } else {
+      // Enable binning
+      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING_HORIZONTAL_MODE_SUM);
+      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_HORIZONTAL_MODE_SUM);
+      status = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, binning);
+      status = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, binning);
+    }
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
+    }
+
+    // Packet size setting
+    status = GXSetInt(g_hDevice, GX_INT_GEV_PACKETSIZE, v_packet_size->get());
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
+    }
+
+    // Packet delay setting
+    status = GXSetInt(g_hDevice, GX_INT_GEV_PACKETDELAY, v_packet_delay->get());
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
+    }
+
     // Frame rate setting
     //  1. Enable the frame rate adjustment mode.
     status = GXSetEnum(g_hDevice, GX_ENUM_ACQUISITION_FRAME_RATE_MODE, GX_ACQUISITION_FRAME_RATE_MODE_ON);
@@ -441,7 +481,7 @@ void CaptureDaheng::writeParameterValues(VarList *varList) {
       status = GXSetInt(g_hDevice, GX_INT_AWBROI_OFFSETY, v_auto_balance_roi_offset_y->get());
       if (status == GX_STATUS_SUCCESS) {
         status = GXSetEnum(g_hDevice, GX_ENUM_AWB_LAMP_HOUSE, GX_AWB_LAMP_HOUSE_FLUORESCENCE);
-        status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_ONCE);
+        status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_CONTINUOUS);
         if (status != GX_STATUS_SUCCESS) {
           GetErrorString(status);
         }
