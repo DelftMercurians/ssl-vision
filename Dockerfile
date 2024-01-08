@@ -14,9 +14,18 @@ RUN curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add  &
   protobuf-compiler libprotobuf-dev \
   libdc1394-22 libdc1394-22-dev \
   libv4l-0 \
-  socat \
-  unzip
+  unzip \
+  wget
 
+# Install Rust
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+# Build Rust bridge and add it to supervisor
+COPY bridge ./bridge
+RUN cd bridge && ~/.cargo/bin/cargo build --release && cp target/release/bridge /usr/bin/bridge && \
+  printf "\n\n[program:bridge]\npriority=25\ncommand=/usr/bin/bridge\n\n" >> /etc/supervisor/conf.d/supervisord.conf
+
+# Install GxGigeSDK
 COPY lib/* /usr/lib/
 COPY ./GxGigeIPConfig /root/
 
@@ -26,8 +35,4 @@ RUN cmake -B build -DUSE_DAHENG=true && make -j 8 && make install_test_data
 
 # Change nginx config to listen on 6080 instead of 80
 RUN sed -i 's/80/6080/g' /etc/nginx/sites-enabled/default
-
-# Add socat udp tunnel to supervisord.conf
-# Receive UDP packets from the multicast address 224.5.23.2:10006 and forward them to the local TCP port 6078
-RUN printf "\n\n[program:socat]\npriority=25\ncommand=socat UDP4-RECVFROM:10006,ip-add-membership=224.5.23.2:0.0.0.0 TCP:localhost:6078\n\n" >> /etc/supervisor/conf.d/supervisord.conf
 
