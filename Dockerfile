@@ -27,6 +27,6 @@ RUN cmake -B build -DUSE_DAHENG=true && make -j 8 && make install_test_data
 RUN sed -i 's/80/6080/g' /etc/nginx/sites-enabled/default
 
 # Add socat udp tunnel to supervisord.conf
-# Receive UDP packets from the multicast address 224.5.23.2:10020 and forward them to the local TCP port 6081
-RUN printf "[program:socat]\npriority=30\ncommand=socat UDP4-RECVFROM:10020,ip-add-membership=224.5.23.2:0.0.0.0 TCP:localhost:6081\n" >> /etc/supervisor/conf.d/supervisord.conf
+# Receive UDP packets from the multicast address 224.5.23.2:10006 and forward them to the local TCP port 6081
+RUN printf "[program:socat]\npriority=30\ncommand=socat UDP4-RECVFROM:10006,ip-add-membership=224.5.23.2:0.0.0.0 TCP:localhost:6081\n" >> /etc/supervisor/conf.d/supervisord.conf
 
