@@ -14,7 +14,8 @@ RUN curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add  &
   protobuf-compiler libprotobuf-dev \
   libdc1394-22 libdc1394-22-dev \
   libv4l-0 \
-  socat
+  socat \
+  unzip
 
 COPY lib/* /usr/lib/
 COPY ./GxGigeIPConfig /root/
