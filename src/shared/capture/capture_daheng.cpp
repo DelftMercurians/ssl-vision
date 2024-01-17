@@ -135,32 +135,8 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
 
   vars->addChild(v_camera_id = new VarInt("Camera ID", default_camera_id, 0, 10));
 
-  v_binning = new VarInt("Binning (downscaling)", 0, 0, 4);
-  vars->addChild(v_binning);
-
-  v_packet_size = new VarInt("Packet Size", 8192, 0, 9000);
-  vars->addChild(v_packet_size);
-
-  v_packet_delay = new VarInt("Packet Delay", 0, 0, 100000);
-  vars->addChild(v_packet_delay);
-
   v_framerate = new VarDouble("Max Framerate", 100.0, 0.0, 100.0);
   vars->addChild(v_framerate);
-
-  v_auto_balance = new VarBool("Auto Balance", false);
-  vars->addChild(v_auto_balance);
-
-  v_auto_balance_roi_width = new VarInt("Auto Balance ROI Width", 0, 0);
-  vars->addChild(v_auto_balance_roi_width);
-
-  v_auto_balance_roi_height = new VarInt("Auto Balance ROI Height", 0, 0);
-  vars->addChild(v_auto_balance_roi_height);
-
-  v_auto_balance_roi_offset_x = new VarInt("Auto Balance ROI Offset X", 0);
-  vars->addChild(v_auto_balance_roi_offset_x);
-
-  v_auto_balance_roi_offset_y = new VarInt("Auto Balance ROI Offset Y", 0);
-  vars->addChild(v_auto_balance_roi_offset_y);
 
   v_man_balance_ratio_red = new VarInt("Balance Ratio Red", 64, 0, 255);
   vars->addChild(v_man_balance_ratio_red);
@@ -171,20 +147,11 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
   v_man_balance_ratio_blue = new VarInt("Balance Ratio Blue", 64, 0, 255);
   vars->addChild(v_man_balance_ratio_blue);
 
-  v_auto_gain = new VarBool("Auto Gain", false);
-  vars->addChild(v_auto_gain);
-
   v_gain = new VarInt("Gain", 0, 0, 255);
   vars->addChild(v_gain);
 
-  v_auto_black_level = new VarBool("Auto Black Level", false);
-  vars->addChild(v_auto_black_level);
-
   v_black_level = new VarDouble("Black Level", 64, 0, 1000);
   vars->addChild(v_black_level);
-
-  v_auto_exposure = new VarBool("Auto Exposure", false);
-  vars->addChild(v_auto_exposure);
 
   v_manual_exposure = new VarDouble("Manual Exposure (μs)", 100, 0, 30000);
   vars->addChild(v_manual_exposure);
@@ -199,7 +166,7 @@ CaptureDaheng::~CaptureDaheng() { vars->deleteAllChildren(); }
 
 bool CaptureDaheng::_buildCamera() {
   DahengInitManager::register_capture();
-  current_id = v_camera_id->get();
+  current_id = v_camera_id->get() + 1;
 
   GX_STATUS emStatus = GXOpenDeviceByIndex(current_id, &g_hDevice);
   if (emStatus != GX_STATUS_SUCCESS) {
@@ -212,6 +179,12 @@ bool CaptureDaheng::_buildCamera() {
     GetErrorString(emStatus);
     return false;
   }
+
+  // Disable binning (set averging to 1x1)
+  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
+  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
+  emStatus = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, 1);
+  emStatus = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, 1);
 
   // Set acquisition mode
   emStatus = GXSetEnum(g_hDevice, GX_ENUM_ACQUISITION_MODE, GX_ACQ_MODE_CONTINUOUS);
@@ -288,6 +261,7 @@ bool CaptureDaheng::stopCapture() {
       GX_STATUS emStatus = GXStreamOff(g_hDevice);
       if (emStatus != GX_STATUS_SUCCESS) {
         GetErrorString(emStatus);
+        throw std::runtime_error("Failed to stop Daheng camera");
       }
 
       // Release the resources and stop acquisition thread
@@ -297,9 +271,9 @@ bool CaptureDaheng::stopCapture() {
       emStatus = GXCloseDevice(g_hDevice);
       if (emStatus != GX_STATUS_SUCCESS) {
         GetErrorString(emStatus);
+        throw std::runtime_error("Failed to close Daheng camera");
       }
 
-      delete g_hDevice;
       g_hDevice = nullptr;
       DahengInitManager::unregister_capture();
     }
@@ -420,45 +394,14 @@ void CaptureDaheng::writeParameterValues(VarList *varList) {
   }
   MUTEX_LOCK;
 
-  if (current_id != v_camera_id->get()) {
+  if (current_id != (v_camera_id->get() + 1)) {
     MUTEX_UNLOCK;
-    resetCamera(v_camera_id->get());  // locks itself
+    resetCamera(v_camera_id->get() + 1);  // locks itself
     MUTEX_LOCK;
   }
 
   if (g_hDevice != nullptr) {
     GX_STATUS status = GX_STATUS_SUCCESS;
-
-    // Binning setting
-    int binning = v_binning->get();
-    if (binning <= 0) {
-      // Disable binning (set averging to 1x1)
-      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
-      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_HORIZONTAL_MODE_AVERAGE);
-      status = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, 1);
-      status = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, 1);
-    } else {
-      // Enable binning
-      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_HORIZONTAL_MODE, GX_BINNING_HORIZONTAL_MODE_SUM);
-      status = GXSetEnum(g_hDevice, GX_ENUM_BINNING_VERTICAL_MODE, GX_BINNING_HORIZONTAL_MODE_SUM);
-      status = GXSetInt(g_hDevice, GX_INT_BINNING_HORIZONTAL, binning);
-      status = GXSetInt(g_hDevice, GX_INT_BINNING_VERTICAL, binning);
-    }
-    if (status != GX_STATUS_SUCCESS) {
-      GetErrorString(status);
-    }
-
-    // Packet size setting
-    status = GXSetInt(g_hDevice, GX_INT_GEV_PACKETSIZE, v_packet_size->get());
-    if (status != GX_STATUS_SUCCESS) {
-      GetErrorString(status);
-    }
-
-    // Packet delay setting
-    status = GXSetInt(g_hDevice, GX_INT_GEV_PACKETDELAY, v_packet_delay->get());
-    if (status != GX_STATUS_SUCCESS) {
-      GetErrorString(status);
-    }
 
     // Frame rate setting
     //  1. Enable the frame rate adjustment mode.
@@ -473,125 +416,67 @@ void CaptureDaheng::writeParameterValues(VarList *varList) {
       GetErrorString(status);
     }
 
-    // Balance ratio setting
-    if (v_auto_balance->getBool()) {
-      status = GXSetInt(g_hDevice, GX_INT_AWBROI_WIDTH, v_auto_balance_roi_width->get());
-      status = GXSetInt(g_hDevice, GX_INT_AWBROI_HEIGHT, v_auto_balance_roi_height->get());
-      status = GXSetInt(g_hDevice, GX_INT_AWBROI_OFFSETX, v_auto_balance_roi_offset_x->get());
-      status = GXSetInt(g_hDevice, GX_INT_AWBROI_OFFSETY, v_auto_balance_roi_offset_y->get());
-      if (status == GX_STATUS_SUCCESS) {
-        status = GXSetEnum(g_hDevice, GX_ENUM_AWB_LAMP_HOUSE, GX_AWB_LAMP_HOUSE_FLUORESCENCE);
-        status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_CONTINUOUS);
-        if (status != GX_STATUS_SUCCESS) {
-          GetErrorString(status);
-        }
-      } else {
-        GetErrorString(status);
-      }
-    } else {
-      // Get range of balance ratio
-      GX_FLOAT_RANGE ratioRange;
-      status = GXGetFloatRange(g_hDevice, GX_FLOAT_BALANCE_RATIO, &ratioRange);
+    // // Balance ratio setting
+    // // Red
+    // status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_RED);
+    // if (status == GX_STATUS_SUCCESS) {
+    //   status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, (float)v_man_balance_ratio_red->get());
+    //   if (status != GX_STATUS_SUCCESS) {
+    //     GetErrorString(status);
+    //   }
+    // } else {
+    //   GetErrorString(status);
+    // }
 
-      // Red
-      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_RED);
-      if (status == GX_STATUS_SUCCESS) {
-        // Remap value from [0, 255] to [min, max]
-        float mapped = ((float)v_man_balance_ratio_red->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
-        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
-        if (status != GX_STATUS_SUCCESS) {
-          GetErrorString(status);
-        }
-      } else {
-        GetErrorString(status);
-      }
+    // // Green
+    // status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_GREEN);
+    // if (status == GX_STATUS_SUCCESS) {
+    //   status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, (float)v_man_balance_ratio_green->get());
+    //   if (status != GX_STATUS_SUCCESS) {
+    //     GetErrorString(status);
+    //   }
+    // } else {
+    //   GetErrorString(status);
+    // }
 
-      // Green
-      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_GREEN);
-      if (status == GX_STATUS_SUCCESS) {
-        // Remap value from [0, 255] to [min, max]
-        float mapped = ((float)v_man_balance_ratio_green->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
-        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
-        if (status != GX_STATUS_SUCCESS) {
-          GetErrorString(status);
-        }
-      } else {
-        GetErrorString(status);
-      }
-
-      // Blue
-      status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_BLUE);
-      if (status == GX_STATUS_SUCCESS) {
-        // Remap value from [0, 255] to [min, max]
-        float mapped = ((float)v_man_balance_ratio_blue->get() / 255.0f) * ratioRange.dMax + ratioRange.dMin;
-        status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, mapped);
-        if (status != GX_STATUS_SUCCESS) {
-          GetErrorString(status);
-        }
-      } else {
-        GetErrorString(status);
-      }
-    }
+    // // Blue
+    // status = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_RATIO_SELECTOR, GX_BALANCE_RATIO_SELECTOR_BLUE);
+    // if (status == GX_STATUS_SUCCESS) {
+    //   status = GXSetFloat(g_hDevice, GX_FLOAT_BALANCE_RATIO, (float)v_man_balance_ratio_blue->get());
+    //   if (status != GX_STATUS_SUCCESS) {
+    //     GetErrorString(status);
+    //   }
+    // } else {
+    //   GetErrorString(status);
+    // }
 
     // Gain setting
-    if (v_auto_gain->getBool()) {
-      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_AUTO, GX_GAIN_AUTO_CONTINUOUS);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
-    } else {
-      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_AUTO, GX_GAIN_AUTO_OFF);
-      status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_SELECTOR, GX_GAIN_SELECTOR_ALL);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
-
-      GX_FLOAT_RANGE gainRange;
-      status = GXGetFloatRange(g_hDevice, GX_FLOAT_GAIN, &gainRange);
-      float mapped = ((float)v_gain->get() / 255.0f) * gainRange.dMax + gainRange.dMin;
-      status = GXSetFloat(g_hDevice, GX_FLOAT_GAIN, mapped);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
+    status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_AUTO, GX_GAIN_AUTO_OFF);
+    status = GXSetEnum(g_hDevice, GX_ENUM_GAIN_SELECTOR, GX_GAIN_SELECTOR_ALL);
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
+    }
+    status = GXSetFloat(g_hDevice, GX_FLOAT_GAIN, (float)v_gain->getDouble());
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
     }
 
     // Black level setting
-    if (v_auto_black_level->getBool()) {
-      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_AUTO, GX_BLACKLEVEL_AUTO_CONTINUOUS);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
-    } else {
-      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_AUTO, GX_BLACKLEVEL_AUTO_OFF);
-      status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_SELECTOR, GX_BLACKLEVEL_SELECTOR_ALL);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
-
-      GX_FLOAT_RANGE blackLevelRange;
-      status = GXGetFloatRange(g_hDevice, GX_FLOAT_BLACKLEVEL, &blackLevelRange);
-      float mapped = ((float)v_black_level->getDouble() / 1000.0f) * blackLevelRange.dMax + blackLevelRange.dMin;
-      status = GXSetFloat(g_hDevice, GX_FLOAT_BLACKLEVEL, mapped);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
+    status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_AUTO, GX_BLACKLEVEL_AUTO_OFF);
+    status = GXSetEnum(g_hDevice, GX_ENUM_BLACKLEVEL_SELECTOR, GX_BLACKLEVEL_SELECTOR_ALL);
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
+    }
+    status = GXSetFloat(g_hDevice, GX_FLOAT_BLACKLEVEL, (float)v_black_level->getDouble());
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
     }
 
     // Exposure setting
-    if (v_auto_exposure->getBool()) {
-      status = GXSetEnum(g_hDevice, GX_ENUM_EXPOSURE_AUTO, GX_EXPOSURE_AUTO_CONTINUOUS);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
-    } else {
-      status = GXSetEnum(g_hDevice, GX_ENUM_EXPOSURE_AUTO, GX_EXPOSURE_AUTO_OFF);
-      GX_FLOAT_RANGE exposureRange;
-      status = GXGetFloatRange(g_hDevice, GX_FLOAT_EXPOSURE_TIME, &exposureRange);
-      float mapped = ((float)v_manual_exposure->getDouble() / 30000.0f) * exposureRange.dMax + exposureRange.dMin;
-      status = GXSetFloat(g_hDevice, GX_FLOAT_EXPOSURE_TIME, mapped);
-      if (status != GX_STATUS_SUCCESS) {
-        GetErrorString(status);
-      }
+    status = GXSetEnum(g_hDevice, GX_ENUM_EXPOSURE_AUTO, GX_EXPOSURE_AUTO_OFF);
+    status = GXSetFloat(g_hDevice, GX_FLOAT_EXPOSURE_TIME, (float)v_manual_exposure->getDouble());
+    if (status != GX_STATUS_SUCCESS) {
+      GetErrorString(status);
     }
   }
 
