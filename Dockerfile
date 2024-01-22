@@ -29,7 +29,6 @@ RUN cd bridge && ~/.cargo/bin/cargo build --release && cp target/release/bridge 
 # Install GxGigeSDK
 COPY lib/* /usr/lib/
 COPY ./GxGigeIPConfig /root/
-COPY ./Galaxy_camera /root/Galaxy_camera
 
 # Build
 COPY . .
