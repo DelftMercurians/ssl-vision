@@ -70,6 +70,10 @@ class CaptureDaheng : public QObject, public CaptureInterface {
   unsigned char* g_pRGBImageBuf = NULL;  ///< Memory for RAW8toRGB24
   unsigned char* g_pRaw8Image = NULL;    ///< Memory for RAW16toRAW8
   int64_t g_i64ColorFilter = GX_COLOR_FILTER_NONE;
+  long nColorCorrectionParam = 0;
+  char* pGammaLut = NULL;
+  char* pContrastLut = NULL;
+  unsigned char* g_improvedImage = NULL;
 
   unsigned int current_id;
   unsigned char* last_buf;
@@ -97,11 +101,13 @@ class CaptureDaheng : public QObject, public CaptureInterface {
 
   void PreForAcquisition();
   void UnPreForAcquisition();
-  int PixelFormatConvert();
+  int PixelFormatConvert(unsigned char* imgBuf, int32_t nWidth, int32_t nHeight);
 
   void resetCamera(unsigned int new_id);
   bool _stopCapture();
   bool _buildCamera();
+  bool _setupImageImprovements();
+  void _releaseLuts();
 
   // A slight blur helps to reduce noise and improve color recognition.
   static const double blur_sigma;

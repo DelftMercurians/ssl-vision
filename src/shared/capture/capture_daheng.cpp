@@ -9,21 +9,24 @@
 
 #include <QDebug>
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
+
+#include "DxImageProc.h"
+#include "GxIAPI.h"
 
 #define MUTEX_LOCK mutex.lock()
 #define MUTEX_UNLOCK mutex.unlock()
 
-#define ACQ_BUFFER_NUM 5               ///< Acquisition Buffer Qty.
-#define ACQ_TRANSFER_SIZE (64 * 1024)  ///< Size of data transfer block
-#define ACQ_TRANSFER_NUMBER_URB 64     ///< Qty. of data transfer block
+#define ACQ_BUFFER_NUM 7  ///< Acquisition Buffer Qty.
 
 int DahengInitManager::count = 0;
 
 void GetErrorString(GX_STATUS emErrorStatus);
 
-int CaptureDaheng::PixelFormatConvert() {
+int CaptureDaheng::PixelFormatConvert(unsigned char *imgBuf, int nWidth, int nHeight) {
   VxInt32 emDXStatus = DX_OK;
 
   // Convert RAW8 or RAW16 image to RGB24 image
@@ -33,9 +36,8 @@ int CaptureDaheng::PixelFormatConvert() {
     case GX_PIXEL_FORMAT_BAYER_GB8:
     case GX_PIXEL_FORMAT_BAYER_BG8: {
       // Convert to the RGB image
-      emDXStatus =
-          DxRaw8toRGB24((unsigned char *)pFrameBuffer->pImgBuf, g_pRGBImageBuf, pFrameBuffer->nWidth,
-                        pFrameBuffer->nHeight, RAW2RGB_NEIGHBOUR, DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
+      emDXStatus = DxRaw8toRGB24(imgBuf, g_pRGBImageBuf, nWidth, nHeight, RAW2RGB_NEIGHBOUR,
+                                 DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
       if (emDXStatus != DX_OK) {
         return -1;
       }
@@ -50,14 +52,13 @@ int CaptureDaheng::PixelFormatConvert() {
     case GX_PIXEL_FORMAT_BAYER_GB12:
     case GX_PIXEL_FORMAT_BAYER_BG12: {
       // Convert to the Raw8 image
-      emDXStatus = DxRaw16toRaw8((unsigned char *)pFrameBuffer->pImgBuf, g_pRaw8Image, pFrameBuffer->nWidth,
-                                 pFrameBuffer->nHeight, DX_BIT_2_9);
+      emDXStatus = DxRaw16toRaw8(imgBuf, g_pRaw8Image, nWidth, nHeight, DX_BIT_2_9);
       if (emDXStatus != DX_OK) {
         return -1;
       }
       // Convert to the RGB24 image
-      emDXStatus = DxRaw8toRGB24(g_pRaw8Image, g_pRGBImageBuf, pFrameBuffer->nWidth, pFrameBuffer->nHeight,
-                                 RAW2RGB_NEIGHBOUR, DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
+      emDXStatus = DxRaw8toRGB24(g_pRaw8Image, g_pRGBImageBuf, nWidth, nHeight, RAW2RGB_NEIGHBOUR,
+                                 DX_PIXEL_COLOR_FILTER(g_i64ColorFilter), false);
       if (emDXStatus != DX_OK) {
         return -1;
       }
@@ -78,6 +79,7 @@ int CaptureDaheng::PixelFormatConvert() {
 //-------------------------------------------------
 void CaptureDaheng::PreForAcquisition() {
   g_pRGBImageBuf = new unsigned char[g_nPayloadSize * 3];
+  g_improvedImage = new unsigned char[g_nPayloadSize * 3];
   g_pRaw8Image = new unsigned char[g_nPayloadSize];
 
   return;
@@ -98,6 +100,10 @@ void CaptureDaheng::UnPreForAcquisition() {
   if (g_pRGBImageBuf != NULL) {
     delete[] g_pRGBImageBuf;
     g_pRGBImageBuf = NULL;
+  }
+  if (g_improvedImage != NULL) {
+    delete[] g_improvedImage;
+    g_improvedImage = NULL;
   }
 
   return;
@@ -164,17 +170,102 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
 
 CaptureDaheng::~CaptureDaheng() { vars->deleteAllChildren(); }
 
+bool CaptureDaheng::_setupImageImprovements() {
+  double dGammaParam = 0.0;
+  long nContrastParam = 0;
+
+  int nLutLength = 0;
+
+  // Gets the contrast adjustment parameter value.
+  GX_STATUS GxStatus = GXGetInt(g_hDevice, GX_INT_CONTRAST_PARAM, &nContrastParam);
+  if (GxStatus != GX_STATUS_SUCCESS) {
+    printf("Failed to get contrast parameter\n");
+    return false;
+  }
+  // Gets the adjustment parameter value of the color correction.
+  GxStatus = GXGetInt(g_hDevice, GX_INT_COLOR_CORRECTION_PARAM, &nColorCorrectionParam);
+  if (GxStatus != GX_STATUS_SUCCESS) {
+    printf("Failed to get color correction parameter\n");
+    return false;
+  }
+  // Gets the Gamma adjustment parameter.
+  GxStatus = GXGetFloat(g_hDevice, GX_FLOAT_GAMMA_PARAM, &dGammaParam);
+  if (GxStatus != GX_STATUS_SUCCESS) {
+    printf("Failed to get gamma parameter\n");
+    return false;
+  }
+
+  VxInt32 DxStatus;
+  do {
+    // Gets the length of the Gamma look-up table.
+    DxStatus = DxGetGammatLut(dGammaParam, NULL, &nLutLength);
+    if (DxStatus != DX_OK) {
+      printf("Failed to get gamma LUT length\n");
+      break;
+    }
+
+    // Applies memory for the Gamma look-up table.
+    pGammaLut = new char[nLutLength];
+    if (pGammaLut == NULL) {
+      DxStatus = DX_NOT_ENOUGH_SYSTEM_MEMORY;
+      printf("Failed to allocate memory for gamma LUT\n");
+      break;
+    }
+
+    // Calculates the Gamma look-up table.
+    DxStatus = DxGetGammatLut(dGammaParam, pGammaLut, &nLutLength);
+    if (DxStatus != DX_OK) {
+      printf("Failed to get gamma LUT\n");
+      break;
+    }
+
+    // Gets the length of the contrast look-up table.
+    DxStatus = DxGetContrastLut(nContrastParam, NULL, &nLutLength);
+    if (DxStatus != DX_OK) {
+      printf("Failed to get contrast LUT length\n");
+      break;
+    }
+    // Applies memory for the contrast look-up table.
+    pContrastLut = new char[nLutLength];
+    if (pContrastLut == NULL) {
+      printf("Failed to allocate memory for contrast LUT\n");
+      DxStatus = DX_NOT_ENOUGH_SYSTEM_MEMORY;
+      break;
+    }
+    // Calculates the contrast look-up table.
+    DxStatus = DxGetContrastLut(nContrastParam, pContrastLut, &nLutLength);
+    if (DxStatus != DX_OK) {
+      printf("Failed to get contrast LUT\n");
+      break;
+    }
+  } while (0);
+
+  // Sets look-up table failed, and then release the resource.
+  if (DxStatus != DX_OK) {
+    printf("Failed to set LUT\n");
+    _releaseLuts();
+    return false;
+  }
+
+  return true;
+}
+
+void CaptureDaheng::_releaseLuts() {
+  if (pGammaLut != NULL) {
+    delete[] pGammaLut;
+    pGammaLut = NULL;
+  }
+  if (pContrastLut != NULL) {
+    delete[] pContrastLut;
+    pContrastLut = NULL;
+  }
+}
+
 bool CaptureDaheng::_buildCamera() {
   DahengInitManager::register_capture();
   current_id = v_camera_id->get() + 1;
 
   GX_STATUS emStatus = GXOpenDeviceByIndex(current_id, &g_hDevice);
-  if (emStatus != GX_STATUS_SUCCESS) {
-    GetErrorString(emStatus);
-    return false;
-  }
-
-  emStatus = GXGetInt(g_hDevice, GX_INT_PAYLOAD_SIZE, &g_nPayloadSize);
   if (emStatus != GX_STATUS_SUCCESS) {
     GetErrorString(emStatus);
     return false;
@@ -200,6 +291,38 @@ bool CaptureDaheng::_buildCamera() {
     return false;
   }
 
+  // Set packet size
+  emStatus = GXSetInt(g_hDevice, GX_INT_GEV_PACKETSIZE, 8192);
+  if (emStatus != GX_STATUS_SUCCESS) {
+    GetErrorString(emStatus);
+    return false;
+  }
+
+  // Set packet delay
+  emStatus = GXSetInt(g_hDevice, GX_INT_GEV_PACKETDELAY, 0);
+  if (emStatus != GX_STATUS_SUCCESS) {
+    GetErrorString(emStatus);
+    return false;
+  }
+
+  // // Set color correction parameter
+  // emStatus = GXSetInt(g_hDevice, GX_INT_COLOR_CORRECTION_PARAM, 0);
+  // if (emStatus != GX_STATUS_SUCCESS) {
+  //   GetErrorString(emStatus);
+  //   return false;
+  // }
+
+  // // Set gamma parameter
+  // emStatus = GXSetBool(g_hDevice, GX_BOOL_GAMMA_ENABLE, true);
+  // emStatus = GXSetEnum(g_hDevice, GX_ENUM_GAMMA_MODE, GX_GAMMA_SELECTOR_USER);
+
+  // // Set contrast parameter
+  // emStatus = GXSetInt(g_hDevice, GX_INT_CONTRAST_PARAM, 0);
+  // if (emStatus != GX_STATUS_SUCCESS) {
+  //   GetErrorString(emStatus);
+  //   return false;
+  // }
+
   // Set buffer quantity of acquisition queue
   uint64_t nBufferNum = ACQ_BUFFER_NUM;
   emStatus = GXSetAcqusitionBufferNumber(g_hDevice, nBufferNum);
@@ -210,6 +333,19 @@ bool CaptureDaheng::_buildCamera() {
 
   // Get color filter
   emStatus = GXGetEnum(g_hDevice, GX_ENUM_PIXEL_COLOR_FILTER, &g_i64ColorFilter);
+  if (emStatus != GX_STATUS_SUCCESS) {
+    GetErrorString(emStatus);
+    return false;
+  }
+
+  // Set Balance White Mode : Continuous
+  emStatus = GXSetEnum(g_hDevice, GX_ENUM_BALANCE_WHITE_AUTO, GX_BALANCE_WHITE_AUTO_CONTINUOUS);
+  if (emStatus != GX_STATUS_SUCCESS) {
+    GetErrorString(emStatus);
+    return false;
+  }
+
+  emStatus = GXGetInt(g_hDevice, GX_INT_PAYLOAD_SIZE, &g_nPayloadSize);
   if (emStatus != GX_STATUS_SUCCESS) {
     GetErrorString(emStatus);
     return false;
@@ -267,6 +403,8 @@ bool CaptureDaheng::stopCapture() {
       // Release the resources and stop acquisition thread
       UnPreForAcquisition();
 
+      _releaseLuts();
+
       // Close device
       emStatus = GXCloseDevice(g_hDevice);
       if (emStatus != GX_STATUS_SUCCESS) {
@@ -313,8 +451,22 @@ RawImage CaptureDaheng::getFrame() {
   if (emStatus == GX_STATUS_SUCCESS) {
     // Check if frame grab was succesful
     if (pFrameBuffer->nStatus == GX_FRAME_STATUS_SUCCESS) {
-      // Convert to RAW8
-      if (PixelFormatConvert() == 0) {
+      unsigned char *imgBuf = (unsigned char *)pFrameBuffer->pImgBuf;
+
+      // Improves the quality of the image.
+      if (_setupImageImprovements()) {
+        VxInt32 DxStatus = DxImageImprovment(pFrameBuffer->pImgBuf, g_improvedImage, pFrameBuffer->nWidth,
+                                             pFrameBuffer->nHeight, nColorCorrectionParam, pContrastLut, pGammaLut);
+        if (DxStatus != DX_OK) {
+          printf("Daheng image improvement failed\n");
+        } else {
+          imgBuf = g_improvedImage;
+        }
+        _releaseLuts();
+      }
+
+      // Convert to RGB24
+      if (PixelFormatConvert(imgBuf, pFrameBuffer->nWidth, pFrameBuffer->nHeight) == 0) {
         // Copy image data to RawImage
         img.setWidth(pFrameBuffer->nWidth);
         img.setHeight(pFrameBuffer->nHeight);
@@ -333,7 +485,7 @@ RawImage CaptureDaheng::getFrame() {
         printf("Daheng color conversion failed\n");
       }
     } else {
-      if (!pFrameBuffer->nStatus == GX_FRAME_STATUS_INCOMPLETE) {
+      if (pFrameBuffer->nStatus == GX_FRAME_STATUS_INCOMPLETE) {
         printf(
             "Daheng framegrab error: incomplete frame -- check your network connection. It's best to use wired "
             "ethernet.\n");
