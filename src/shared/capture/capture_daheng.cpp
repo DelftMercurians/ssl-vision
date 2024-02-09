@@ -153,7 +153,7 @@ CaptureDaheng::CaptureDaheng(VarList *_settings, int default_camera_id, QObject 
   v_black_level = new VarDouble("Black Level", 64, 0, 1000);
   vars->addChild(v_black_level);
 
-  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 100, 0, 30000);
+  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 100, 0);
   vars->addChild(v_manual_exposure);
 
   current_id = 0;
