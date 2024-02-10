@@ -71,9 +71,8 @@ class CaptureDaheng : public QObject, public CaptureInterface {
   unsigned char* g_pRaw8Image = NULL;    ///< Memory for RAW16toRAW8
   int64_t g_i64ColorFilter = GX_COLOR_FILTER_NONE;
   long nColorCorrectionParam = 0;
-  char* pGammaLut = NULL;
-  char* pContrastLut = NULL;
-  unsigned char* g_improvedImage = NULL;
+  unsigned char* pGammaLut = NULL;
+  unsigned char* pContrastLut = NULL;
 
   unsigned int current_id;
   unsigned char* last_buf;

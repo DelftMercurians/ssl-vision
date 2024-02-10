@@ -79,7 +79,6 @@ int CaptureDaheng::PixelFormatConvert(unsigned char *imgBuf, int nWidth, int nHe
 //-------------------------------------------------
 void CaptureDaheng::PreForAcquisition() {
   g_pRGBImageBuf = new unsigned char[g_nPayloadSize * 3];
-  g_improvedImage = new unsigned char[g_nPayloadSize * 3];
   g_pRaw8Image = new unsigned char[g_nPayloadSize];
 
   return;
@@ -100,10 +99,6 @@ void CaptureDaheng::UnPreForAcquisition() {
   if (g_pRGBImageBuf != NULL) {
     delete[] g_pRGBImageBuf;
     g_pRGBImageBuf = NULL;
-  }
-  if (g_improvedImage != NULL) {
-    delete[] g_improvedImage;
-    g_improvedImage = NULL;
   }
 
   return;
@@ -205,7 +200,7 @@ bool CaptureDaheng::_setupImageImprovements() {
     }
 
     // Applies memory for the Gamma look-up table.
-    pGammaLut = new char[nLutLength];
+    pGammaLut = new unsigned char[nLutLength];
     if (pGammaLut == NULL) {
       DxStatus = DX_NOT_ENOUGH_SYSTEM_MEMORY;
       printf("Failed to allocate memory for gamma LUT\n");
@@ -226,7 +221,7 @@ bool CaptureDaheng::_setupImageImprovements() {
       break;
     }
     // Applies memory for the contrast look-up table.
-    pContrastLut = new char[nLutLength];
+    pContrastLut = new unsigned char[nLutLength];
     if (pContrastLut == NULL) {
       printf("Failed to allocate memory for contrast LUT\n");
       DxStatus = DX_NOT_ENOUGH_SYSTEM_MEMORY;
@@ -351,6 +346,8 @@ bool CaptureDaheng::_buildCamera() {
     return false;
   }
 
+  _setupImageImprovements();
+
   // Allocate the memory for pixel format transform
   PreForAcquisition();
 
@@ -451,22 +448,16 @@ RawImage CaptureDaheng::getFrame() {
   if (emStatus == GX_STATUS_SUCCESS) {
     // Check if frame grab was succesful
     if (pFrameBuffer->nStatus == GX_FRAME_STATUS_SUCCESS) {
-      unsigned char *imgBuf = (unsigned char *)pFrameBuffer->pImgBuf;
-
-      // Improves the quality of the image.
-      if (_setupImageImprovements()) {
-        VxInt32 DxStatus = DxImageImprovment(pFrameBuffer->pImgBuf, g_improvedImage, pFrameBuffer->nWidth,
+      // Convert to RGB24
+      if (PixelFormatConvert((unsigned char *)pFrameBuffer->pImgBuf, pFrameBuffer->nWidth, pFrameBuffer->nHeight) ==
+          0) {
+        // Improves the quality of the image.
+        VxInt32 DxStatus = DxImageImprovment(g_pRGBImageBuf, g_pRGBImageBuf, pFrameBuffer->nWidth,
                                              pFrameBuffer->nHeight, nColorCorrectionParam, pContrastLut, pGammaLut);
         if (DxStatus != DX_OK) {
           printf("Daheng image improvement failed\n");
-        } else {
-          imgBuf = g_improvedImage;
         }
-        _releaseLuts();
-      }
 
-      // Convert to RGB24
-      if (PixelFormatConvert(imgBuf, pFrameBuffer->nWidth, pFrameBuffer->nHeight) == 0) {
         // Copy image data to RawImage
         img.setWidth(pFrameBuffer->nWidth);
         img.setHeight(pFrameBuffer->nHeight);
