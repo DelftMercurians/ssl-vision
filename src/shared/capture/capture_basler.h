@@ -24,78 +24,79 @@
 #include <QMutex>
 
 class BaslerInitManager {
-public:
-	static void register_capture();
-	static void unregister_capture();
-//private:
-	static int count;
+ public:
+  static void register_capture();
+  static void unregister_capture();
+  // private:
+  static int count;
 };
 
-class CaptureBasler: public QObject, public CaptureInterface {
-public:
-	Q_OBJECT
+class CaptureBasler : public QObject, public CaptureInterface {
+ public:
+  Q_OBJECT
 
-    public slots:
-    void changed(VarType * group);
-private:
-	QMutex mutex;
+ public slots:
+  void changed(VarType* group);
 
-public:
-	CaptureBasler(VarList* _settings=0, int default_camera_id=0, QObject* parent=0);
-    void mvc_connect(VarList * group);
-	~CaptureBasler();
+ private:
+  QMutex mutex;
 
-	bool startCapture();
+ public:
+  CaptureBasler(VarList* _settings = 0, int default_camera_id = 0, QObject* parent = 0);
+  void mvc_connect(VarList* group);
+  ~CaptureBasler();
 
-	bool stopCapture();
+  bool startCapture();
 
-	bool isCapturing() { return is_capturing; };
+  bool stopCapture();
 
-	RawImage getFrame();
+  bool isCapturing() { return is_capturing; };
 
-	void releaseFrame();
+  RawImage getFrame();
 
-	string getCaptureMethodName() const;
+  void releaseFrame();
 
-	bool copyAndConvertFrame(const RawImage & src, RawImage & target);
+  string getCaptureMethodName() const;
 
-	void readAllParameterValues();
+  bool copyAndConvertFrame(const RawImage& src, RawImage& target);
 
-	void writeParameterValues(VarList* varList);
+  void readAllParameterValues();
 
-private:
-	bool is_capturing;
-        TimeSync timeSync;
-        bool ignore_capture_failure;
-        Pylon::CBaslerUniversalInstantCamera* camera;
-        Pylon::CBaslerUniversalGrabResultPtr grab_result;
-        Pylon::CImageFormatConverter converter;
-        unsigned int current_id;
-        unsigned char* last_buf;
+  void writeParameterValues(VarList* varList);
 
-        // freq should always be 125 MHz for Basler-ace-1300-75gc
-        int camera_frequency = 125e6;
-        VarList* vars;
-        VarInt* v_camera_id;
-        VarDouble* v_framerate;
-        VarStringEnum* v_auto_gain;
-        VarInt* v_gain;
+ private:
+  bool is_capturing;
+  TimeSync timeSync;
+  bool ignore_capture_failure;
+  Pylon::CBaslerUniversalInstantCamera* camera;
+  Pylon::CBaslerUniversalGrabResultPtr grab_result;
+  Pylon::CImageFormatConverter converter;
+  unsigned int current_id;
+  unsigned char* last_buf;
 
-        VarStringEnum* v_whitebalance_mode;
-        VarStringEnum* v_auto_exposure;
+  // freq should always be 125 MHz for Basler-ace-1300-75gc
+  int camera_frequency = 125e6;
+  VarList* vars;
+  VarInt* v_camera_id;
+  VarDouble* v_framerate;
+  VarStringEnum* v_auto_gain;
+  VarInt* v_gain;
 
-        VarDouble* v_manual_exposure;
-        VarStringEnum* v_color_mode;
+  VarStringEnum* v_whitebalance_mode;
+  VarStringEnum* v_auto_exposure;
 
-        void resetCamera(unsigned int new_id);
-        bool _stopCapture();
-  	bool _buildCamera();
+  VarDouble* v_manual_exposure;
+  VarStringEnum* v_color_mode;
 
-        // // A slight blur helps to reduce noise and improve color recognition.
-        // static const double blur_sigma;
-        // void gaussianBlur(RawImage& img);
-        // void contrast(RawImage& img, double factor);
-        // void sharpen(RawImage& img);
+  void resetCamera(unsigned int new_id);
+  bool _stopCapture();
+  bool _buildCamera();
+
+  // // A slight blur helps to reduce noise and improve color recognition.
+  // static const double blur_sigma;
+  // void gaussianBlur(RawImage& img);
+  // void contrast(RawImage& img, double factor);
+  // void sharpen(RawImage& img);
 };
 
 #endif
