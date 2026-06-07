@@ -97,33 +97,40 @@ bool CaptureBasler::_buildCamera() {
 	int amt = Pylon::CTlFactory::GetInstance().EnumerateDevices(devices);
 	current_id = v_camera_id->get();
 	printf("Current camera id: %d\n", current_id);
+	std::cout << "[BASLER] Selected camera ID: " << std::to_string(current_id) << std::endl;
+	std::cout << "[BASLER] Number of available cameras: " << std::to_string(amt) << std::endl;
 	if (amt > current_id) {
 		Pylon::CDeviceInfo info = devices[current_id];
+    	std::cout << "[BASLER] Camera User Defined Name: " << info.GetUserDefinedName() << std::endl;
 
 		camera = new Pylon::CBaslerGigEInstantCamera(
 				Pylon::CTlFactory::GetInstance().CreateDevice(info));
         	printf("Opening camera %d...\n", current_id);
 		camera->Open();
-        	camera->GammaSelector.SetValue(Basler_GigECamera::GammaSelector_User); //Necessary for interface to work
+        	//camera->GammaSelector.SetValue(Basler_GigECamera::GammaSelector_User); //Necessary for interface to work
         	camera->AcquisitionFrameRateEnable.SetValue(true); //Turn on capped framerates
         	camera_frequency = camera->GevTimestampTickFrequency.GetValue();;
+		std::cout << "[BASLER] Post open" << std::endl;
 
         	//let camera send timestamps and FrameCounts.
 		if (GenApi::IsWritable(camera->ChunkModeActive)) {
+      		std::cout << "[BASLER] Setting chunk modes" << std::endl;
 			camera->ChunkModeActive.SetValue(true);
 			camera->ChunkSelector.SetValue(Basler_GigECamera::ChunkSelector_Timestamp);
 			camera->ChunkEnable.SetValue(true);
-			camera->ChunkSelector.SetValue(Basler_GigECamera::ChunkSelector_Framecounter);
-			camera->ChunkEnable.SetValue(true);
-			camera->GevTimestampControlReset.Execute(); //Reset the internal time stamp counter of the camera to 0
+			//camera->ChunkSelector.SetValue(Basler_GigECamera::ChunkSelector_Framecounter);
+			//camera->ChunkEnable.SetValue(true);
+			//camera->GevTimestampControlReset.Execute(); //Reset the internal time stamp counter of the camera to 0
 		} else {
 			std::cout << "Failed, camera model does not support accurate timings!" << std::endl;
 			return false; //Camera does not support accurate timings
 		}
         	printf("Done!\n");
 		is_capturing = true;
+  		std::cout << "[BASLER] IS CAPTURING" << std::endl;
 		return true;
 	}
+  	std::cout << "[BASLER] Camera ID out of range" << std::endl;
 	return false;
 }
 
@@ -133,11 +140,14 @@ bool CaptureBasler::startCapture() {
 		if (camera == nullptr) {
 			if (!_buildCamera()) {
                 // Did not make a camera!
+  				std::cout << "[BASLER] Did not make a camera!" << std::endl;
                 MUTEX_UNLOCK;
                 return false;
             }
+  			std::cout << "[BASLER] Built camera" << std::endl;
 		}
 		camera->StartGrabbing(Pylon::GrabStrategy_LatestImageOnly);
+  		std::cout << "[BASLER] Started Grabbing" << std::endl;
 	} catch (Pylon::GenericException& e) {
         printf("Pylon exception: %s", e.what());
         delete camera;
@@ -151,6 +161,7 @@ bool CaptureBasler::startCapture() {
 		throw;
 	}
 	MUTEX_UNLOCK;
+	std::cout << "[BASLER] startCapture() Done" << std::endl;
 	return true;
 }
 
@@ -208,6 +219,7 @@ RawImage CaptureBasler::getFrame() {
 		while (fail_count < 10
 				&& (!grab_result || !grab_result->GrabSucceeded())) {
 			try {
+ // std::cout << "[BASLER] retrieving frame" << std::endl;
 				camera->RetrieveResult(1000, grab_result,
 						Pylon::TimeoutHandling_ThrowException);
 			} catch (Pylon::TimeoutException& e) {
@@ -307,24 +319,24 @@ void CaptureBasler::readAllParameterValues() {
 		if (!was_open) {
 			camera->Open();
 		}
-		v_framerate->setDouble(camera->AcquisitionFrameRateAbs.GetValue());
-		camera->BalanceRatioSelector.SetValue(
-				Basler_GigECamera::BalanceRatioSelector_Red);
-		v_balance_ratio_red->setInt(camera->BalanceRatioRaw.GetValue());
-		camera->BalanceRatioSelector.SetValue(
-				Basler_GigECamera::BalanceRatioSelector_Green);
-		v_balance_ratio_green->setInt(camera->BalanceRatioRaw.GetValue());
-		camera->BalanceRatioSelector.SetValue(
-				Basler_GigECamera::BalanceRatioSelector_Blue);
-		v_balance_ratio_blue->setInt(camera->BalanceRatioRaw.GetValue());
+		//v_framerate->setDouble(camera->AcquisitionFrameRateAbs.GetValue());
+		//camera->BalanceRatioSelector.SetValue(
+		//		Basler_GigECamera::BalanceRatioSelector_Red);
+		//v_balance_ratio_red->setInt(camera->BalanceRatioRaw.GetValue());
+		//camera->BalanceRatioSelector.SetValue(
+		//		Basler_GigECamera::BalanceRatioSelector_Green);
+		//v_balance_ratio_green->setInt(camera->BalanceRatioRaw.GetValue());
+		//camera->BalanceRatioSelector.SetValue(
+		//		Basler_GigECamera::BalanceRatioSelector_Blue);
+		//v_balance_ratio_blue->setInt(camera->BalanceRatioRaw.GetValue());
 
-		v_auto_gain->setBool(camera->GainAuto.GetValue() == Basler_GigECamera::GainAuto_Continuous);
-		v_gain->setDouble(camera->GainRaw.GetValue());
-		v_gamma_enable->setBool(camera->GammaEnable.GetValue());
-		v_gamma->setDouble(camera->Gamma.GetValue());
+		//v_auto_gain->setBool(camera->GainAuto.GetValue() == Basler_GigECamera::GainAuto_Continuous);
+		//v_gain->setDouble(camera->GainRaw.GetValue());
+		//v_gamma_enable->setBool(camera->GammaEnable.GetValue());
+		//v_gamma->setDouble(camera->Gamma.GetValue());
 
-		v_auto_exposure->setBool(camera->ExposureAuto.GetValue() == Basler_GigECamera::ExposureAuto_Continuous);
-		v_manual_exposure->setDouble(camera->ExposureTimeAbs.GetValue());
+		//v_auto_exposure->setBool(camera->ExposureAuto.GetValue() == Basler_GigECamera::ExposureAuto_Continuous);
+		//v_manual_exposure->setDouble(camera->ExposureTimeAbs.GetValue());
 	} catch (const Pylon::GenericException& e) {
 		fprintf(stderr, "Exception reading parameter values: %s\n", e.what());
 		MUTEX_UNLOCK;
