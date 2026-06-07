@@ -86,7 +86,12 @@ class CaptureBasler : public QObject, public CaptureInterface {
   VarStringEnum* v_auto_exposure;
 
   VarDouble* v_manual_exposure;
-  VarStringEnum* v_color_mode;
+  VarStringEnum* v_pixel_format;
+
+  VarInt* v_width;
+  VarInt* v_height;
+  VarInt* v_offset_x;
+  VarInt* v_offset_y;
 
   void resetCamera(unsigned int new_id);
   bool _stopCapture();

@@ -39,39 +39,60 @@ CaptureBasler::CaptureBasler(VarList* _settings, int default_camera_id, QObject*
   settings->addChild(vars = new VarList("Capture Settings"));
   settings->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
   vars->removeFlags(VARTYPE_FLAG_HIDE_CHILDREN);
-  v_color_mode = new VarStringEnum("color mode", Colors::colorFormatToString(COLOR_RGB8));
-  // v_color_mode->addItem(Colors::colorFormatToString(COLOR_YUV422_UYVY));
-  v_color_mode->addItem(Colors::colorFormatToString(COLOR_RGB8));
-  vars->addChild(v_color_mode);
 
   vars->addChild(v_camera_id = new VarInt("Camera ID", default_camera_id, 0, 3));
 
   v_framerate = new VarDouble("Max Framerate", 100.0, 0.0, 100.0);
   vars->addChild(v_framerate);
 
-  v_auto_gain = new VarStringEnum("auto gain", "Off");
+  v_auto_gain = new VarStringEnum("Auto Gain", "Off");
   v_auto_gain->addItem("Off");
   v_auto_gain->addItem("Once");
   v_auto_gain->addItem("Continuous");
   vars->addChild(v_auto_gain);
 
-  v_gain = new VarInt("gain", 2, 0, 48);
+  v_gain = new VarInt("Gain", 2, 0, 48);
   vars->addChild(v_gain);
 
-  v_auto_exposure = new VarStringEnum("auto exposure", "Off");
+  v_auto_exposure = new VarStringEnum("Auto Exposure", "Off");
   v_auto_exposure->addItem("Off");
   v_auto_exposure->addItem("Once");
   v_auto_exposure->addItem("Continuous");
   vars->addChild(v_auto_exposure);
 
-  v_manual_exposure = new VarDouble("manual exposure (μs)", 10000, 19, 30000);
+  v_manual_exposure = new VarDouble("Manual Exposure (μs)", 10000, 19, 30000);
   vars->addChild(v_manual_exposure);
 
-  v_whitebalance_mode = new VarStringEnum("auto whitebalance", "Off");
+  v_whitebalance_mode = new VarStringEnum("Auto Whitebalance", "Off");
   v_whitebalance_mode->addItem("Off");
   v_whitebalance_mode->addItem("Once");
   v_whitebalance_mode->addItem("Continuous");
   vars->addChild(v_whitebalance_mode);
+
+  v_pixel_format = new VarStringEnum("Pixel Format", "BayerRG8");
+  v_pixel_format->addItem("Mono8");
+  v_pixel_format->addItem("Mono10");
+  v_pixel_format->addItem("Mono10p");
+  v_pixel_format->addItem("Mono12");
+  v_pixel_format->addItem("Mono12p");
+  v_pixel_format->addItem("RGB8");
+  v_pixel_format->addItem("BGR8");
+  v_pixel_format->addItem("YCbCr422_8");
+  v_pixel_format->addItem("BayerRG8");
+  v_pixel_format->addItem("BayerRG10");
+  v_pixel_format->addItem("BayerRG10p");
+  v_pixel_format->addItem("BayerRG12");
+  v_pixel_format->addItem("BayerRG12p");
+  vars->addChild(v_pixel_format);
+
+  v_width = new VarInt("Width", 1920, 2, 1936);
+  vars->addChild(v_width);
+  v_height = new VarInt("Height", 1200, 2, 1216);
+  vars->addChild(v_height);
+  v_offset_x = new VarInt("Offset X", 0, 0, 1934);
+  vars->addChild(v_offset_x);
+  v_offset_y = new VarInt("Offset Y", 0, 0, 1214);
+  vars->addChild(v_offset_y);
 
   current_id = 0;
 
@@ -132,6 +153,63 @@ bool CaptureBasler::startCapture() {
       }
       std::cout << "[BASLER] Built camera" << std::endl;
     }
+
+    // Set color mode
+    const auto pixel_format = v_pixel_format->getString();
+    if (pixel_format == "RGB8") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_RGB8" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_RGB8);
+    } else if (pixel_format == "BGR8") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BGR8" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BGR8);
+    } else if (pixel_format == "BayerRG8") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BayerRG8" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
+    } else if (pixel_format == "YCbCr422_8") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_YCbCr422_8" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_YCbCr422_8);
+    } else if (pixel_format == "BayerRG10") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BayerRG10" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG10);
+    } else if (pixel_format == "BayerRG10p") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BayerRG10p" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG10p);
+    } else if (pixel_format == "BayerRG12") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BayerRG12" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+    } else if (pixel_format == "BayerRG12p") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_BayerRG12p" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12p);
+    } else if (pixel_format == "Mono8") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_Mono8" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_Mono8);
+    } else if (pixel_format == "Mono10") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_Mono10" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_Mono10);
+    } else if (pixel_format == "Mono10p") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_Mono10p" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_Mono10p);
+    } else if (pixel_format == "Mono12") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_Mono12" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_Mono12);
+    } else if (pixel_format == "Mono12p") {
+      std::cout << "[BASLER] PixelFormat PixelFormat_Mono12p" << std::endl;
+      camera->PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_Mono12p);
+    }
+
+    // Set framing
+    std::cout << "[BASLER] Width " << std::to_string(v_width->getInt()) << std::endl;
+    camera->Width.SetValue(v_width->getInt());
+
+    std::cout << "[BASLER] Height " << std::to_string(v_height->getInt()) << std::endl;
+    camera->Height.SetValue(v_height->getInt());
+
+    std::cout << "[BASLER] OffsetX " << std::to_string(v_offset_x->getInt()) << std::endl;
+    camera->OffsetX.SetValue(v_offset_x->getInt());
+
+    std::cout << "[BASLER] OffsetY " << std::to_string(v_offset_y->getInt()) << std::endl;
+    camera->OffsetY.SetValue(v_offset_y->getInt());
+
     camera->StartGrabbing(Pylon::GrabStrategy_LatestImageOnly);
     std::cout << "[BASLER] Started Grabbing" << std::endl;
   } catch (Pylon::GenericException& e) {
@@ -299,6 +377,51 @@ void CaptureBasler::readAllParameterValues() {
     // std::cout << "[BASLER] Read AcquisitionFrameRate" << std::endl;
     v_framerate->setDouble(camera->AcquisitionFrameRate.GetValue());
 
+    const auto pixelformat = camera->PixelFormat.GetValue();
+    switch (pixelformat) {
+      case Basler_UniversalCameraParams::PixelFormat_Mono8:
+        v_pixel_format->setString("Mono8");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_Mono10:
+        v_pixel_format->setString("Mono10");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_Mono10p:
+        v_pixel_format->setString("Mono10p");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_Mono12:
+        v_pixel_format->setString("Mono12");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_Mono12p:
+        v_pixel_format->setString("Mono12p");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BayerRG8:
+        v_pixel_format->setString("BayerRG8");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BayerRG10:
+        v_pixel_format->setString("BayerRG10");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BayerRG10p:
+        v_pixel_format->setString("BayerRG10p");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BayerRG12:
+        v_pixel_format->setString("BayerRG12");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BayerRG12p:
+        v_pixel_format->setString("BayerRG12p");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_RGB8:
+        v_pixel_format->setString("RGB8");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_BGR8:
+        v_pixel_format->setString("BGR8");
+        break;
+      case Basler_UniversalCameraParams::PixelFormat_YCbCr422_8:
+        v_pixel_format->setString("YCbCr422_8");
+        break;
+      default:
+        break;
+    }
+
     // std::cout << "[BASLER] Read BalanceWhiteAuto" << std::endl;
     const auto whitebalanceauto = camera->BalanceWhiteAuto.GetValue();
     if (whitebalanceauto == Basler_UniversalCameraParams::BalanceWhiteAuto_Off) {
@@ -327,6 +450,11 @@ void CaptureBasler::readAllParameterValues() {
 
     // std::cout << "[BASLER] Read Gain" << std::endl;
     v_gain->setDouble(camera->Gain.GetValue());
+
+    v_width->setInt(camera->Width.GetValue());
+    v_height->setInt(camera->Height.GetValue());
+    v_offset_x->setInt(camera->OffsetX.GetValue());
+    v_offset_y->setInt(camera->OffsetY.GetValue());
 
     // std::cout << "[BASLER] Read ExposureAuto" << std::endl;
     const auto exposureauto = camera->ExposureAuto.GetValue();
